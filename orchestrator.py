@@ -58,13 +58,10 @@ def _load_prompts_from_config(config: Dict[str, Any]) -> list[str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Orchestrate experiment setup")
-    parser.add_argument("--config", required=True, help="Path to YAML config file")
-    parser.add_argument(
-        "--setup-only",
-        action="store_true",
-        help="Only set up tasks and exit (default behaviour)",
+    parser = argparse.ArgumentParser(
+        description="Set up tasks in the database and exit"
     )
+    parser.add_argument("--config", required=True, help="Path to YAML config file")
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -83,12 +80,8 @@ def main() -> None:
             task_id = hashlib.sha256(key.encode("utf-8")).hexdigest()
             insert_task(conn, task_id, prompt, model["name"])
 
-    if args.setup_only:
-        print("Task setup complete: tasks stored in DB")
-        return
-
     print(
-        "Setup complete. Workers can now be started separately to process the tasks."
+        "Task setup complete: workers can now be started separately to process the tasks."
     )
 
 

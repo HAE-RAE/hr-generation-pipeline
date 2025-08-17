@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import time
-from typing import Any, Dict, Tuple
+from typing import Any, Dict
 
 import yaml
 
@@ -28,13 +28,11 @@ def load_config(path: str) -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def load_prompts(cfg: Dict[str, Any]) -> Tuple[str, str]:
-    """Load judge prompt template and rubric from YAML files."""
-    with open(cfg["judge_prompt_template_path"], "r", encoding="utf-8") as f:
-        judge_data = yaml.safe_load(f) or {}
+def load_rubric(cfg: Dict[str, Any]) -> str:
+    """Load evaluation rubric from a YAML file."""
     with open(cfg["rubric_path"], "r", encoding="utf-8") as f:
         rubric_data = yaml.safe_load(f) or {}
-    return judge_data.get("template", ""), rubric_data.get("rubric", "")
+    return rubric_data.get("rubric", "")
 
 
 def simple_judge(response: str, rubric: str) -> Dict[str, Any]:
@@ -90,7 +88,7 @@ def main() -> None:
     cfg = load_config(args.config)
     conn = get_connection(cfg["database"])
     init_db(conn)
-    judge_template, rubric = load_prompts(cfg["evaluation_worker"])
+    rubric = load_rubric(cfg["evaluation_worker"])
 
     processed = 0
     while True:
