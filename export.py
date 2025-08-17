@@ -56,7 +56,9 @@ def main() -> None:
     cur.execute("SELECT * FROM tasks WHERE status='COMPLETE'")
     rows = cur.fetchall()
 
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    dirpath = os.path.dirname(args.output)
+    if dirpath:
+        os.makedirs(dirpath, exist_ok=True)
     out_path = f"{args.output}.{args.format}"
 
     if args.format == "csv":

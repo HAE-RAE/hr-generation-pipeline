@@ -1,6 +1,6 @@
 import sqlite3
 import time
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tasks (
@@ -46,24 +46,33 @@ def insert_task(conn: sqlite3.Connection, task_id: str, prompt: str, model_name:
     )
     conn.commit()
 
-def fetch_and_lock_tasks(conn: sqlite3.Connection, from_status: str, to_status: str, limit: int) -> List[sqlite3.Row]:
-    """Fetch tasks with a given status and immediately lock them by updating their status.
-
-    This prevents multiple workers from processing the same task concurrently.
-    """
+def fetch_and_lock_tasks(
+    conn: sqlite3.Connection, from_status: str, to_status: str, limit: int
+) -> List[sqlite3.Row]:
+    """Atomically fetch tasks with a given status and lock them by updating their status."""
     cur = conn.cursor()
+    cur.execute("BEGIN IMMEDIATE")
     cur.execute(
-        "SELECT * FROM tasks WHERE status=? LIMIT ?", (from_status, limit)
+        "SELECT task_id FROM tasks WHERE status=? LIMIT ?", (from_status, limit)
+    )
+    ids = [r[0] for r in cur.fetchall()]
+    if not ids:
+        conn.commit()
+        return []
+    placeholders = ",".join(["?"] * len(ids))
+    now = time.time()
+    cur.execute(
+        f"UPDATE tasks SET status=?, last_updated=? WHERE task_id IN ({placeholders}) AND status=?",
+        [to_status, now, *ids, from_status],
+    )
+    if cur.rowcount == 0:
+        conn.commit()
+        return []
+    cur.execute(
+        f"SELECT * FROM tasks WHERE task_id IN ({placeholders}) AND status=?",
+        [*ids, to_status],
     )
     rows = cur.fetchall()
-    if not rows:
-        return []
-    ids = [r["task_id"] for r in rows]
-    placeholders = ",".join(["?"] * len(ids))
-    cur.execute(
-        f"UPDATE tasks SET status=?, last_updated=? WHERE task_id IN ({placeholders})",
-        [to_status, time.time(), *ids],
-    )
     conn.commit()
     return rows
 
