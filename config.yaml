@@ -7,22 +7,32 @@ database:
   path: "./tasks.db"
 
 dataset:
-  name: "imdb"
-  prompt_column: "text"
-  split: "test[:5]"
+  # You can provide inline prompts for quick tests (takes precedence over name/file)
+  prompts:
+    - "Compare reasoning vs base: What is 2+2?"
+    - "Write a short plan to cook pasta."
+  # name: "imdb"
+  # prompt_column: "text"
+  # split: "test[:5]"
   sample_size: 2
 
 models:
-  - name: "Dummy-Model"
-    path: "/path/to/model"
+  - name: "tiny-gpt2"
+    path: "sshleifer/tiny-gpt2"
 
 generation_worker:
   replicas: 1
+  backend: "transformers"  # "transformers" or "vllm"
   vllm_engine_params:
     tensor_parallel_size: 1
+    # dtype: "auto"   # optional
   sampling_params:
-    temperature: 0.7
-    max_tokens: 2048
+    temperature: 0.2
+    max_tokens: 64
+  reasoning_prompting:
+    strategy: "append"     # "append" or "prepend"
+    on_text: "Let's think step by step."
+    off_text: ""
   reasoning_control_param:
     name: "enable_reasoning"
     on_value: true
