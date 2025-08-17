@@ -33,6 +33,30 @@ def load_config(path: str) -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def _load_prompts_from_config(config: Dict[str, Any]) -> list[str]:
+    dataset_cfg = config.get("dataset", {})
+    # 1) Inline prompts list
+    if isinstance(dataset_cfg.get("prompts"), list) and dataset_cfg["prompts"]:
+        prompts = [str(p) for p in dataset_cfg["prompts"]]
+    # 2) Local text file (one prompt per line)
+    elif isinstance(dataset_cfg.get("file"), str):
+        path = dataset_cfg["file"]
+        with open(path, "r", encoding="utf-8") as f:
+            prompts = [line.strip() for line in f if line.strip()]
+    # 3) Hugging Face datasets if available
+    elif load_dataset is not None and dataset_cfg.get("name"):
+        ds = load_dataset(dataset_cfg["name"], split=dataset_cfg.get("split", "train"))
+        prompts = ds[dataset_cfg.get("prompt_column", "prompt")]
+    else:
+        # Fallback minimal prompts for offline usage
+        prompts = ["Say hello.", "Summarize: AI helps humans."]
+
+    sample_size = dataset_cfg.get("sample_size")
+    if sample_size:
+        prompts = prompts[: int(sample_size)]
+    return prompts
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Orchestrate experiment setup")
     parser.add_argument("--config", required=True, help="Path to YAML config file")
@@ -49,17 +73,8 @@ def main() -> None:
     conn = get_connection(config["database"])
     init_db(conn)
 
-    # Load prompts
-    dataset_cfg = config["dataset"]
-    if load_dataset is None:
-        raise RuntimeError(
-            "datasets library is required to load prompts. Install `datasets` package."
-        )
-    ds = load_dataset(dataset_cfg["name"], split=dataset_cfg.get("split", "train"))
-    prompts = ds[dataset_cfg.get("prompt_column", "prompt")]
-    sample_size = dataset_cfg.get("sample_size")
-    if sample_size:
-        prompts = prompts[:sample_size]
+    # Load prompts (supports inline/file/HF datasets)
+    prompts = _load_prompts_from_config(config)
 
     # Insert tasks for every (prompt, model) combination
     for prompt in prompts:

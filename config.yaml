@@ -13,8 +13,8 @@ dataset:
   sample_size: 2
 
 models:
-  - name: "Dummy-Model"
-    path: "/path/to/model"
+  - name: "tiny-gpt2"
+    path: "sshleifer/tiny-gpt2"
 
 generation_worker:
   replicas: 1
