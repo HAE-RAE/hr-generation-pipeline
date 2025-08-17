@@ -1,0 +1,43 @@
+project:
+  name: "Reasoning Model Evaluation"
+  experiment_name: "reasoning_eval_v2_advanced"
+
+database:
+  type: "sqlite"
+  path: "./tasks.db"
+
+dataset:
+  name: "imdb"
+  prompt_column: "text"
+  split: "test[:5]"
+  sample_size: 2
+
+models:
+  - name: "Dummy-Model"
+    path: "/path/to/model"
+
+generation_worker:
+  replicas: 1
+  vllm_engine_params:
+    tensor_parallel_size: 1
+  sampling_params:
+    temperature: 0.7
+    max_tokens: 2048
+  reasoning_control_param:
+    name: "enable_reasoning"
+    on_value: true
+    off_value: false
+
+evaluation_worker:
+  replicas: 1
+  judge_model:
+    type: "openai"
+    name: "gpt-4-turbo"
+  judge_prompt_template_path: "./prompts/judge_template.yaml"
+  rubric_path: "./prompts/general_rubric.yaml"
+  choice_logic:
+    method: "higher_score"
+
+logging:
+  level: "INFO"
+  dir: "./results/logs"
