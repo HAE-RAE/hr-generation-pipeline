@@ -7,14 +7,14 @@ database:
   path: "./tasks.db"
 
 dataset:
-  # You can provide inline prompts for quick tests (takes precedence over name/file)
-  prompts:
-    - "Compare reasoning vs base: What is 2+2?"
-    - "Write a short plan to cook pasta."
-  # name: "imdb"
-  # prompt_column: "text"
-  # split: "test[:5]"
-  sample_size: 2
+  # Inline records follow the standard question/gold/category schema
+  records:
+    - question: "What is 2+2?\nA. 3\nB. 4\nC. 5\nD. 6"
+      gold: "B"
+      category: "mcqa"
+    - question: "Solve 5 * 3."
+      gold: "15"
+      category: "math"
 
 models:
   - name: "tiny-gpt2"
@@ -40,13 +40,17 @@ generation_worker:
 
 evaluation_worker:
   replicas: 1
-  judge_model:
-    type: "openai"
-    name: "gpt-4-turbo"
-  judge_prompt_template_path: "./prompts/judge_template.yaml"
-  rubric_path: "./prompts/general_rubric.yaml"
-  choice_logic:
-    method: "higher_score"
+  evaluations_to_run:
+    - "mcqa"
+    - "math_verify"
+    - "llm_judge_comparative"
+    - "llm_judge_individual"
+  comparative_judge:
+    model: "gpt-4-turbo"
+    prompt_template_path: "./prompts/comparative_judge_template.yaml"
+  individual_judge:
+    model: "gpt-4-turbo"
+    rubric_path: "./prompts/general_rubric.yaml"
 
 logging:
   level: "INFO"

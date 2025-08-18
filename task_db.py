@@ -2,11 +2,21 @@ import sqlite3
 import time
 from typing import Dict, List
 
+# The tasks table stores the complete lifecycle of a single evaluation
+# unit.  The original implementation only tracked prompts and simple
+# length based scores.  For the upgraded evaluation pipeline we expand the
+# schema so that structured questions, gold answers and multiple judge
+# outputs can be recorded.  Columns added:
+#   - question, gold, category: standardised dataset schema
+#   - base_is_correct, reasoning_is_correct: objective evaluation flags
+#   - judge_choice, judge_reasoning: comparative LLM-as-a-judge results
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tasks (
     task_id TEXT PRIMARY KEY,
     status TEXT,
-    prompt TEXT,
+    question TEXT,
+    gold TEXT,
+    category TEXT,
     model_name TEXT,
     base_response TEXT,
     reasoning_response TEXT,
@@ -14,7 +24,11 @@ CREATE TABLE IF NOT EXISTS tasks (
     reasoning_score INTEGER,
     base_feedback TEXT,
     reasoning_feedback TEXT,
+    base_is_correct INTEGER,
+    reasoning_is_correct INTEGER,
     choice TEXT,
+    judge_choice TEXT,
+    judge_reasoning TEXT,
     last_updated REAL,
     error_log TEXT
 )
@@ -34,15 +48,24 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.execute(SCHEMA)
     conn.commit()
 
-def insert_task(conn: sqlite3.Connection, task_id: str, prompt: str, model_name: str) -> None:
+def insert_task(
+    conn: sqlite3.Connection,
+    task_id: str,
+    question: str,
+    gold: str,
+    category: str,
+    model_name: str,
+) -> None:
     """Insert a new task if it does not already exist."""
     now = time.time()
     conn.execute(
         """
-        INSERT OR IGNORE INTO tasks (task_id, status, prompt, model_name, last_updated)
-        VALUES (?, 'PENDING_GENERATION', ?, ?, ?)
+        INSERT OR IGNORE INTO tasks (
+            task_id, status, question, gold, category, model_name, last_updated
+        )
+        VALUES (?, 'PENDING_GENERATION', ?, ?, ?, ?, ?)
         """,
-        (task_id, prompt, model_name, now),
+        (task_id, question, gold, category, model_name, now),
     )
     conn.commit()
 
@@ -104,11 +127,22 @@ def update_evaluation_success(
     base_feedback: str,
     reasoning_feedback: str,
     choice: str,
+    base_is_correct: int | None = None,
+    reasoning_is_correct: int | None = None,
+    judge_choice: str | None = None,
+    judge_reasoning: str | None = None,
 ) -> None:
+    """Update evaluation results for a task.
+
+    All new evaluation fields are optional so that individual evaluation
+    modes can be toggled without schema churn.
+    """
     conn.execute(
         """
         UPDATE tasks SET status='COMPLETE', base_score=?, reasoning_score=?,
-            base_feedback=?, reasoning_feedback=?, choice=?, last_updated=?
+            base_feedback=?, reasoning_feedback=?, choice=?,
+            base_is_correct=?, reasoning_is_correct=?,
+            judge_choice=?, judge_reasoning=?, last_updated=?
         WHERE task_id=?
         """,
         (
@@ -117,6 +151,10 @@ def update_evaluation_success(
             base_feedback,
             reasoning_feedback,
             choice,
+            base_is_correct,
+            reasoning_is_correct,
+            judge_choice,
+            judge_reasoning,
             time.time(),
             task_id,
         ),

@@ -157,7 +157,7 @@ def process_batch(
     for row in tasks:
         task_id = row["task_id"]
         model_name = row["model_name"]
-        prompt = row["prompt"]
+        prompt = row["question"]
         try:
             model_id = model_map.get(model_name, model_name)
             base = generate_text(
