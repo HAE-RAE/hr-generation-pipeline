@@ -4,16 +4,21 @@
 
 ## 1. 환경 준비
 - Python 3.10 이상을 권장합니다.
-- 필요한 패키지는 `pip install -r requirements.txt` 형식으로 설치할 수 있습니다. (현재 예시에서는 표준 라이브러리만 사용합니다.)
+- `math_verify` 기반 수학 평가가 필요하다면 `pip install math-verify`를 추가로 실행합니다.
 
 ## 2. 설정 파일 편집
 `config.yaml` 파일 하나로 실험을 제어합니다. 주요 항목은 다음과 같습니다.
 
 - `database`: SQLite 또는 PostgreSQL 등의 연결 정보를 지정합니다.
-- `dataset`: Hugging Face 데이터셋 이름과 사용할 열을 설정합니다.
+- `dataset`: Hugging Face 데이터셋 이름과 split을 지정하거나, 예시처럼 `records` 항목에 직접 데이터를 적을 수 있습니다. 모든 레코드는 `question`, `gold`, `category` 컬럼을 포함해야 합니다.
 - `models`: 평가할 모델 목록을 나열합니다.
 - `generation_worker`: 응답 생성과 관련된 설정과 추론 on/off 제어 파라미터를 포함합니다.
-- `evaluation_worker`: 판정에 사용할 프롬프트 템플릿과 루브릭 YAML 경로를 지정합니다.
+- `evaluation_worker`: 실행할 평가 모듈을 `evaluations_to_run` 리스트로 지정합니다.
+  - `mcqa`: 객관식 정답 비교
+  - `math_verify`: 수학 답안 검증
+  - `llm_judge_comparative`: Base vs Reasoning 상대 비교
+  - `llm_judge_individual`: 개별 응답 평가
+  - 각 Judge 설정은 `comparative_judge`와 `individual_judge` 블록에서 모델 이름, 프롬프트 템플릿, 루브릭 경로 등을 지정합니다.
 
 ## 3. 태스크 생성
 ```bash
@@ -31,7 +36,7 @@ python generation_worker.py --config config.yaml
 ```bash
 python evaluation_worker.py --config config.yaml
 ```
-평가 워커는 생성된 응답을 읽어 점수와 피드백을 부여하고 상태를 `COMPLETE`로 업데이트합니다.
+평가 워커는 `evaluations_to_run`에 명시된 모듈을 적용하여 정답 여부, 판정 결과 등을 기록하고 상태를 `COMPLETE`로 업데이트합니다.
 
 ## 6. 결과 내보내기
 ```bash

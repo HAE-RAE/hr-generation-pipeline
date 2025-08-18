@@ -1,16 +1,19 @@
 # Reasoning Model Evaluation Pipeline
 
-이 프로젝트는 다양한 언어 모델의 **Reasoning(추론) 모드**를 정량적으로 비교하기 위한 실험 파이프라인입니다. 모든 구성은 하나의 `config.yaml` 파일로 제어되며, 워커들은 상태 기반으로 독립적으로 동작합니다.
+이 프로젝트는 **question/gold/category** 스키마를 따르는 데이터셋을 받아 언어 모델의 Base/Reasoning 응답을 생성하고 평가하는 실험 파이프라인입니다. 모든 동작은 하나의 `config.yaml`로 제어되며 워커들은 DB 상태를 통해 독립적으로 동작합니다.
 
 ## 구성 요소
-- `orchestrator.py`: 데이터셋과 모델 조합으로 태스크를 생성하여 DB에 저장합니다.
-- `generation_worker.py`: 모델 응답을 생성하고 DB 상태를 업데이트합니다.
-- `evaluation_worker.py`: 생성된 응답을 판정 프롬프트와 루브릭을 이용해 평가합니다.
-- `export.py`: 완료된 태스크를 CSV 또는 Parquet 파일로 추출합니다.
-- `prompts/`: YAML 형식의 판정 프롬프트(`judge_template.yaml`)와 루브릭(`general_rubric.yaml`)이 위치합니다.
+- `orchestrator.py`: 데이터셋을 로드하고 카테고리별 프롬프트를 생성하여 태스크(DB)에 등록합니다.
+- `generation_worker.py`: 각 태스크에 대해 `base_response`와 `reasoning_response`를 생성합니다.
+- `evaluation_worker.py`: 선택된 평가 모듈을 실행하여 점수와 판정 결과를 기록합니다.
+  - MCQA 정답 비교
+  - `math_verify` 기반 수학 검증
+  - LLM-as-Judge (개별/상대 비교) 평가
+- `export.py`: 완료된 태스크를 CSV 또는 Parquet 형식으로 추출합니다.
+- `prompts/`: 판정 프롬프트와 루브릭 YAML(`comparative_judge_template.yaml`, `general_rubric.yaml`)이 위치합니다.
 
 ## 빠른 시작
-1. `config.yaml` 내용을 환경에 맞게 수정합니다.
+1. `config.yaml`의 `dataset`과 `evaluation_worker.evaluations_to_run`을 실험에 맞게 수정합니다.
 2. 태스크 등록
    ```bash
    python orchestrator.py --config config.yaml --setup-only
@@ -27,5 +30,7 @@
    ```bash
    python export.py --config config.yaml --format csv
    ```
+
+수학 검증을 사용하려면 추가로 `pip install math-verify`를 실행하세요.
 
 자세한 사용 방법은 [`docs/usage_ko.md`](docs/usage_ko.md) 문서를 참고하십시오.
