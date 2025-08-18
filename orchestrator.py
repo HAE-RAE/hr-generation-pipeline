@@ -15,8 +15,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import time
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import yaml
 
@@ -33,28 +32,58 @@ def load_config(path: str) -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def _load_prompts_from_config(config: Dict[str, Any]) -> list[str]:
+def _load_dataset_from_config(config: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Load dataset records with question/gold/category fields."""
     dataset_cfg = config.get("dataset", {})
-    # 1) Inline prompts list
-    if isinstance(dataset_cfg.get("prompts"), list) and dataset_cfg["prompts"]:
-        prompts = [str(p) for p in dataset_cfg["prompts"]]
-    # 2) Local text file (one prompt per line)
-    elif isinstance(dataset_cfg.get("file"), str):
-        path = dataset_cfg["file"]
-        with open(path, "r", encoding="utf-8") as f:
-            prompts = [line.strip() for line in f if line.strip()]
-    # 3) Hugging Face datasets if available
+    records: List[Dict[str, str]] = []
+
+    # Inline records for quick tests
+    if isinstance(dataset_cfg.get("records"), list) and dataset_cfg["records"]:
+        for r in dataset_cfg["records"]:
+            if isinstance(r, dict):
+                records.append(
+                    {
+                        "question": str(r.get("question", "")),
+                        "gold": str(r.get("gold", "")),
+                        "category": str(r.get("category", "")),
+                    }
+                )
+    # Hugging Face dataset loader
     elif load_dataset is not None and dataset_cfg.get("name"):
         ds = load_dataset(dataset_cfg["name"], split=dataset_cfg.get("split", "train"))
-        prompts = ds[dataset_cfg.get("prompt_column", "prompt")]
+        for ex in ds:
+            records.append(
+                {
+                    "question": str(ex.get("question", "")),
+                    "gold": str(ex.get("gold", "")),
+                    "category": str(ex.get("category", "")),
+                }
+            )
     else:
-        # Fallback minimal prompts for offline usage
-        prompts = ["Say hello.", "Summarize: AI helps humans."]
+        # Fallback sample to keep pipeline functional offline
+        records = [
+            {
+                "question": "What is 1+1?\nA. 1\nB. 2",
+                "gold": "B",
+                "category": "mcqa",
+            }
+        ]
 
     sample_size = dataset_cfg.get("sample_size")
     if sample_size:
-        prompts = prompts[: int(sample_size)]
-    return prompts
+        records = records[: int(sample_size)]
+    return records
+
+
+def _prompt_for_category(rec: Dict[str, str]) -> str:
+    """Create the final prompt based on dataset category."""
+    category = (rec.get("category") or "").lower()
+    q = rec.get("question", "")
+    if "mcqa" in category or category.startswith("mcq"):
+        return f"{q}\nAnswer with the letter of the correct option."
+    if "math" in category:
+        return f"{q}\nProvide only the final answer."
+    return q
 
 
 def main() -> None:
@@ -70,15 +99,23 @@ def main() -> None:
     conn = get_connection(config["database"])
     init_db(conn)
 
-    # Load prompts (supports inline/file/HF datasets)
-    prompts = _load_prompts_from_config(config)
+    # Load dataset records
+    records = _load_dataset_from_config(config)
 
-    # Insert tasks for every (prompt, model) combination
-    for prompt in prompts:
+    # Insert tasks for every (question, model) combination
+    for rec in records:
+        prompt = _prompt_for_category(rec)
         for model in config.get("models", []):
             key = f"{prompt}\0{model['name']}"
             task_id = hashlib.sha256(key.encode("utf-8")).hexdigest()
-            insert_task(conn, task_id, prompt, model["name"])
+            insert_task(
+                conn,
+                task_id,
+                prompt,
+                rec.get("gold", ""),
+                rec.get("category", ""),
+                model["name"],
+            )
 
     print(
         "Task setup complete: workers can now be started separately to process the tasks."
